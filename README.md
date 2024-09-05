@@ -1,5 +1,7 @@
 # MTE 380 - Stewart Platform Project
 ## Running the Docker Container
+> [!NOTE]  
+> These steps are to be used on Linux (Ubuntu), and possibly WSL2 on Windows
 1. Install [Docker Engine](https://docs.docker.com/engine/install/)
 2. Install the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) - Install *and* configure it for Docker *rootless* too
 2. Clone this repository
