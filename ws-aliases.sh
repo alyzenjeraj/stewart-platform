@@ -7,7 +7,7 @@ alias ws-build="docker build -t stewart_platform_ros2 -f docker/Dockerfile ."
 # Function to run the Docker container interactively with a mounted volume
 function ws-start {
     local workspace_dir=$(pwd)
-    ROS2_CONTAINER_ID=$(docker run -d -it -v $workspace_dir/ros2_ws:/ros2_ws stewart_platform_ros2)
+    ROS2_CONTAINER_ID=$(docker run -d -it --runtime=nvidia --gpus all -v $workspace_dir/ros2_ws:/ros2_ws stewart_platform_ros2)
     echo "Started container with ID: $ROS2_CONTAINER_ID"
 }
 
