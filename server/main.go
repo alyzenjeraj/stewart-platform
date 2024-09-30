@@ -1,68 +1,97 @@
 package main
 
 import (
-    "encoding/json" // Add this import
     "fmt"
+    "log"
+    "net"
     "net/http"
+    "sync"
 
-    "github.com/pion/webrtc/v4"
+    pb "stewart-platform/proto/frame"  // Import your frame proto package
+    "google.golang.org/grpc"
+    "github.com/gorilla/websocket"
 )
 
-func main() {
-    // Create a new WebRTC API instance
-    peerConnection, err := webrtc.NewPeerConnection(webrtc.Configuration{})
-    if err != nil {
-        panic(err)
-    }
+// Server struct to store the latest frame
+type Server struct {
+    pb.UnimplementedFrameServiceServer
+    latestFrame []byte
+    mu          sync.Mutex
+}
 
-    // Create a new video track for the webcam stream
-    videoTrack, err := webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{
-        MimeType: webrtc.MimeTypeVP8,
-    }, "video", "webrtc")
-    if err != nil {
-        panic(err)
-    }
+var upgrader = websocket.Upgrader{
+    CheckOrigin: func(r *http.Request) bool {
+        return true
+    },
+}
 
-    // Add the track to the peer connection
-    _, err = peerConnection.AddTrack(videoTrack)
-    if err != nil {
-        panic(err)
-    }
-
-    // Create a simple HTTP handler for SDP (WebRTC signaling)
-    http.HandleFunc("/offer", func(w http.ResponseWriter, r *http.Request) {
-        offer := webrtc.SessionDescription{}
-
-        // Decode the incoming offer (SDP)
-        if err := json.NewDecoder(r.Body).Decode(&offer); err != nil {
-            panic(err)
-        }
-
-        // Set remote description
-        if err := peerConnection.SetRemoteDescription(offer); err != nil {
-            panic(err)
-        }
-
-        // Create and set local description (answer)
-        answer, err := peerConnection.CreateAnswer(nil)
+// StreamFrames function that receives frames via gRPC
+func (s *Server) StreamFrames(stream pb.FrameService_StreamFramesServer) error {
+    for {
+        frame, err := stream.Recv()
         if err != nil {
-            panic(err)
+            return err
         }
 
-        if err := peerConnection.SetLocalDescription(answer); err != nil {
-            panic(err)
+        // Store the latest frame in the server
+        s.mu.Lock()
+        s.latestFrame = frame.Data
+        s.mu.Unlock()
+
+        fmt.Printf("Received frame of size: %d bytes\n", len(frame.Data))
+    }
+}
+
+// WebSocket handler for streaming the frames
+func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
+    conn, err := upgrader.Upgrade(w, r, nil)
+    if err != nil {
+        log.Println("Error upgrading to WebSocket:", err)
+        return
+    }
+    defer conn.Close()
+
+    for {
+        s.mu.Lock()
+        frame := s.latestFrame
+        s.mu.Unlock()
+
+        if len(frame) > 0 {
+            err = conn.WriteMessage(websocket.BinaryMessage, frame)
+            if err != nil {
+                log.Println("Error sending frame:", err)
+                break
+            }
         }
+    }
+}
 
-        // Encode the answer to JSON and send it back
-        w.Header().Set("Content-Type", "application/json")
-        if err := json.NewEncoder(w).Encode(peerConnection.LocalDescription()); err != nil {
-            panic(err)
+// Serve the HTML page for the frontend interface
+func (s *Server) serveHTML(w http.ResponseWriter, r *http.Request) {
+    http.ServeFile(w, r, "../client/index.html")
+}
+
+func main() {
+    server := &Server{}
+
+    // Start the gRPC server for receiving frames
+    go func() {
+        lis, err := net.Listen("tcp", ":5051")  // gRPC listening on port 5051
+        if err != nil {
+            log.Fatalf("Failed to listen: %v", err)
         }
-    })
+        grpcServer := grpc.NewServer()
+        pb.RegisterFrameServiceServer(grpcServer, server)
 
-    // Serve static files (HTML + JavaScript)
-    http.Handle("/", http.FileServer(http.Dir("./static")))
+        if err := grpcServer.Serve(lis); err != nil {
+            log.Fatalf("Failed to serve: %v", err)
+        }
+    }()
 
-    fmt.Println("WebRTC server is running on :8080")
-    http.ListenAndServe(":8080", nil)
+    // Serve the WebSocket for video streaming and the HTML interface
+    http.HandleFunc("/ws", server.handleWebSocket)  // WebSocket endpoint
+    http.HandleFunc("/", server.serveHTML)          // Serve HTML page
+
+    log.Println("Serving WebSocket video stream on ws://localhost:8080/ws")
+    log.Fatal(http.ListenAndServe(":8080", nil))  // Serve everything on port 8080
 }

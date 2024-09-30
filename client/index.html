@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Video Stream</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+        }
+    </style>
+</head>
+<body>
+    <h1>WebSocket Video Stream</h1>
+    <canvas id="videoCanvas" width="640" height="480"></canvas>
+
+    <script>
+        const canvas = document.getElementById("videoCanvas");
+        const ctx = canvas.getContext("2d");
+
+        // Create a WebSocket connection to the server
+        const socket = new WebSocket("ws://localhost:8080/ws");
+
+        // When a message is received (JPEG frame)
+        socket.onmessage = function(event) {
+            const reader = new FileReader();
+            reader.onload = function() {
+                const img = new Image();
+                img.onload = function() {
+                    // Draw the image onto the canvas
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                };
+                img.src = reader.result;
+            };
+            reader.readAsDataURL(event.data);  // Convert the binary data to base64-encoded image data
+        };
+
+        socket.onerror = function(event) {
+            console.error("WebSocket error:", event);
+        };
+    </script>
+</body>
+</html>

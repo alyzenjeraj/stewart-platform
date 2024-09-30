@@ -1,0 +1,14 @@
+syntax = "proto3";
+option go_package = ".";
+
+service FrameService {
+    rpc StreamFrames (stream Frame) returns (stream Ack);
+}
+
+message Frame {
+    bytes data = 1;
+}
+
+message Ack {
+    string message = 1; //Acknowledgment Message
+}

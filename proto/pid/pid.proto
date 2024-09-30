@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package pid;
+
+service PIDService {
+    rpc SetPIDValues (stream PIDRequest) returns (stream PIDResponse);
+    rpc RequestPIDValues (stream PIDRequest) returns (stream PIDResponse);
+}
+
+message PIDRequest {
+    float kp = 1;
+    float ki = 2;
+    float kd = 3;
+}
+
+message PIDResponse {
+    float kp = 1;
+    float ki = 2;
+    float kd = 3;
+    string message = 4;
+}
