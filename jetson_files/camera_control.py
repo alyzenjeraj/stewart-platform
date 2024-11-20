@@ -35,6 +35,7 @@
 import os
 import inverse_kinematics
 import time
+import math
 
 if os.name == 'nt':
     import msvcrt
@@ -207,87 +208,6 @@ def update_gamepad():
 
 # t1.start()
 
-coordinates = (None, None)
-lock = Lock()
-
-frame_width = 480
-frame_height = 480
-
-# Define a function to detect a yellow ball
-def detect_yellow_ball():
-    global coordinates
-    # Start capturing video from the webcam. If multiple webcams connected, you may use 1,2, etc.
-    cap = cv.VideoCapture(0)
-    # *1 CAP_PROP_FPS sets the frame rate of the webcam to 30 fps here
-    cap.set(cv.CAP_PROP_FPS, 30)
-    
-    while True:
-        # Read a frame from the webcam
-        ret, frame = cap.read()
-        if not ret:
-            print("Failed to grab frame")
-            break
-        
-        # *2 Set the image resolution to 480x480. Note increasing resolution increases processing power used, and may slow down video feed.
-        frame = cv.resize(frame, (frame_width, frame_height))
-
-        # Convert the frame from BGR to HSV color space to easily identify a colour
-        hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV) 
-
-        # *3 Define the range of yellow color in HSV [Hue, Saturation, Value]
-        # SET THESE VALUES VIA THE METHOD EXPLAINED IN THE TUTORIAL
-        ball_color_lower = np.array([20, 50, 100]) # [lower Hue, lower Saturation, lower Value]
-        ball_color_upper = np.array([30, 255, 255]) # [upper Hue, upper Saturation, upper Value]
-
-        # Threshold the HSV image to get the colors defined above
-        # Pixels in the range are set to white (255) and those that aren't are set to black (0), creating a binary mask 
-        mask = cv.inRange(hsv, ball_color_lower, ball_color_upper)
-
-        # Find contours in the mask
-        # RETR_TREE retrieves all hierarchical contours and organizes them
-        # CHAIN_APPROX_SIMPLE compresses horizontal, vertical, and diagonal segments, leaving only their end points
-        contours, _ = cv.findContours(mask, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-
-        # Find the index of the largest contour
-        if contours:
-            # Determines the larget contour size using the cv.contour Area function
-            largest_contour = max(contours, key=cv.contourArea)
-            # Computes the minimum enclosing circle aroudn the largest contour
-            ((x, y), radius) = cv.minEnclosingCircle(largest_contour)
-            # * 4 Only consider large enough objects. If it only detects a small portion of your ball, you can test higher radius values to capture more of the ball
-            if radius > 10:
-                # Draw a yellow circle around the ball
-                cv.circle(frame, (int(x), int(y)), int(radius), (0, 255, 255), 2)
-                # Draw a red dot in the center of the ball
-                cv.circle(frame, (int(x), int(y)), 2, (0, 0, 255), -1)  # (image to draw dot on, x,y pixel coordinates, radius in pixels, RGB values in this case red, -1 indicates to fill the circle)
-                # Display the position of the ball
-
-                x_from_center = int(x) - frame_width//2
-                y_from_center = frame_height//2 - int(y)
-
-                print(f"Yellow ball detected at position: ({int(x)}, {int(y)})")
-
-                
-
-                with lock:
-                    coordinates = (x_from_center, y_from_center)
-
-        # Display the resulting frame
-        cv.imshow('frame', frame)
-
-        # Break the loop when 'q' is pressed
-        if cv.waitKey(1) & 0xFF == ord('q'):
-            break
-
-    # Release the capture when everything is done
-    cap.release()
-    # Close all windows
-    cv.destroyAllWindows()
-
-cv_thread = Thread(target=detect_yellow_ball)
-cv_thread.daemon = True
-cv_thread.start()
-
 
 starting_height = -45.5
 # slowly rise from resting position (-45.5, 0, 0) to (0, 0, 0) over 2 seconds
@@ -301,26 +221,158 @@ while (time.time() - starttime) < 2:
     for i in range(1, 4):
         packetHandler.write4ByteTxOnly(portHandler, i, ADDR_GOAL_POSITION, motor_outputs[i-1])
     time.sleep(0.001)
-    print(motor_outputs)
+    # print(motor_outputs)
 goal_orientation = [0, 0, 0]
 a = time.time()
 
 
 x_coord, y_coord = 0, 0
 
-pid_x = pid.PID(kp=1.0, ki=0.1, kd=0.05, setpoint=0)
-pid_y = pid.PID(kp=1.0, ki=0.1, kd=0.05, setpoint=0)
 
+
+import cv2 as cv
+import numpy as np
+from time import sleep
+from threading import Thread, Lock
+from picamera2 import Picamera2
+# '***' stands for things to modify for your own webcam, display, and ball if needed
+
+coordinates = (None, None)
+lock = Lock()
+
+
+# 100PX PADDING
+PADDING = 100
+DIM=(840, 680)
+K=np.array([[317.1032601121787, 0.0, 427.84295702569545], [0.0, 316.9109999392102, 322.1899226520426], [0.0, 0.0, 1.0]])
+D=np.array([[-0.03271833759372577], [0.01650599446263598], [-0.03136567080274809], [0.013848250351526226]])
+
+
+frame_width = 640
+frame_height = 480
+
+imgMASK = None
+imageHSV = None
+lower = np.array([0, 0, 0])
+upper = np.array([255, 255, 255])
+def on_trackbar(val):
+    global lower
+    global upper
+    hue_min = cv.getTrackbarPos("Hue Min", "TrackedBars")
+    hue_max = cv.getTrackbarPos("Hue Max", "TrackedBars")
+    sat_min = cv.getTrackbarPos("Sat Min", "TrackedBars")
+    sat_max = cv.getTrackbarPos("Sat Max", "TrackedBars")
+    val_min = cv.getTrackbarPos("Val Min", "TrackedBars")
+    val_max = cv.getTrackbarPos("Val Max", "TrackedBars")
+
+    lower = np.array([hue_min, sat_min, val_min])
+    upper = np.array([hue_max, sat_max, val_max])
+
+
+cv.namedWindow("TrackedBars")
+cv.resizeWindow("TrackedBars", 640, 240)
+
+cv.createTrackbar("Hue Min", "TrackedBars", 0, 179, on_trackbar)
+cv.createTrackbar("Hue Max", "TrackedBars", 46, 179, on_trackbar)
+cv.createTrackbar("Sat Min", "TrackedBars", 9, 255, on_trackbar)
+cv.createTrackbar("Sat Max", "TrackedBars", 255, 255, on_trackbar)
+cv.createTrackbar("Val Min", "TrackedBars", 207, 255, on_trackbar)
+cv.createTrackbar("Val Max", "TrackedBars", 255, 255, on_trackbar)
+
+
+# Start capturing video from the webcam. If multiple webcams connected, you may use 1,2, etc.
+picam2 = Picamera2()
+# Set up video configuration
+config = picam2.create_video_configuration(main={"size": (640, 480)})
+picam2.configure(config)
+
+# Start the camera
+picam2.start()
+# *1 CAP_PROP_FPS sets the frame rate of the webcam to 30 fps here
+map1, map2 = cv.fisheye.initUndistortRectifyMap(K, D, np.eye(3), K, DIM, cv.CV_16SC2)
+
+#pid_x = pid.PID(kp=0.015, ki=0.0015, kd=0.005, setpoint=0, output_limits=(-25,25))
+#pid_y = pid.PID(kp=0.015, ki=0.0015, kd=0.005, setpoint=50, output_limits=(-25,25))
+
+# semi good pd
+#pid_x = pid.PID(kp=0.022, ki=0.000000015, kd=0.01, setpoint=0, output_limits=(-25,25))
+#pid_y = pid.PID(kp=0.022, ki=0.000000015, kd=0.01, setpoint=50, output_limits=(-25,25))
+
+pid_x = pid.PID(kp=0.022, ki=0.01, kd=0.012, setpoint=0, output_limits=(-25,25))
+pid_y = pid.PID(kp=0.022, ki=0.01, kd=0.012, setpoint=0, output_limits=(-25,25))
+counter = 0
 while 1:
+    counter += 0.02
+    pid_x.setpoint = 150*math.sin(counter)
+    pid_y.setpoint = 150*math.cos(counter)
+    # Read a frame from the webcam
+    frame = picam2.capture_array()
+    frame = cv.copyMakeBorder(frame, PADDING, PADDING, PADDING, PADDING, cv.BORDER_CONSTANT, None)
+    frame = cv.remap(frame, map1, map2, interpolation=cv.INTER_LINEAR, borderMode=cv.BORDER_CONSTANT)
+
+    # *2 Set the image resolution to 480x480. Note increasing resolution increases processing power used, and may slow down video feed.
+    frame = cv.resize(frame, (frame_width, frame_height))
+    frame = cv.cvtColor(frame, cv.COLOR_RGB2BGR)
+    # Convert the frame from BGR to HSV color space to easily identify a colour
+    hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV) 
+
+    # *3 Define the range of yellow color in HSV [Hue, Saturation, Value]
+    # SET THESE VALUES VIA THE METHOD EXPLAINED IN THE TUTORIAL
+    ball_color_lower = np.array([20, 100, 100]) # [lower Hue, lower Saturation, lower Value]
+    ball_color_upper = np.array([30, 255, 255]) # [upper Hue, upper Saturation, upper Value]
+
+    # Threshold the HSV image to get the colors defined above
+    # Pixels in the range are set to white (255) and those that aren't are set to black (0), creating a binary mask 
+    #mask = cv.inRange(hsv, ball_color_lower, ball_color_upper)
+    
+    mask = cv.inRange(hsv, lower, upper)
+    cv.imshow("mask", mask)
+    # Find contours in the mask
+    # RETR_TREE retrieves all hierarchical contours and organizes them
+    # CHAIN_APPROX_SIMPLE compresses horizontal, vertical, and diagonal segments, leaving only their end points
+    contours, _ = cv.findContours(mask, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+
+    # Find the index of the largest contour
+    if contours:
+        # Determines the larget contour size using the cv.contour Area function
+        largest_contour = max(contours, key=cv.contourArea)
+        # Computes the minimum enclosing circle aroudn the largest contour
+        ((x, y), radius) = cv.minEnclosingCircle(largest_contour)
+        # * 4 Only consider large enough objects. If it only detects a small portion of your ball, you can test higher radius values to capture more of the ball
+        if radius > 30:
+            # Draw a yellow circle around the ball
+            cv.circle(frame, (int(x), int(y)), int(radius), (0, 255, 255), 2)
+            # Draw a red dot in the center of the ball
+            cv.circle(frame, (int(x), int(y)), 2, (0, 0, 255), -1)  # (image to draw dot on, x,y pixel coordinates, radius in pixels, RGB values in this case red, -1 indicates to fill the circle)
+            # Display the position of the ball
+
+            x_coord = -(int(x) - frame_width//2)
+            y_coord = frame_height//2 - int(y)
+
+            # print(f"Yellow ball detected at position: ({int(x)}, {int(y)})")
+
+            
+
+        
+            # print(x_coord, y_coord)
+
+    # Display the resulting frame
+    cv.circle(frame, (int(-pid_x.setpoint + frame_width//2), int(-pid_y.setpoint + frame_height//2)), 10, (255, 255, 255), 2)
+    cv.imshow('frame', frame)
+
+    # Break the loop when 'q' is pressed
+    if cv.waitKey(1) & 0xFF == ord('q'):
+        break
+            
     #print("Press any key to continue! (or press ESC to quit!)")
     #if getch() == chr(0x1b):
     #    break
 
-    with lock:
-        x_coord, y_coord = coordinates
 
     x_error = pid_x.compute(x_coord)
     y_error = pid_y.compute(y_coord)
+
+    # print(f'X_ERROR: {x_error}, Y_ERROR: {y_error}')
 
     goal_orientation = [h,x_error,y_error]
     target_angle = 15
@@ -328,7 +380,7 @@ while 1:
     #goal_orientation = goal_orientations[goal_index]
     arm_angles = ik.compute(*goal_orientation)
     motor_outputs = inverse_kinematics.MotorOutputs.compute_motor_outputs(*arm_angles)
-    print(motor_outputs)
+    # print(motor_outputs)
 
     for i in range(1, 4):
         packetHandler.write4ByteTxOnly(portHandler, i, ADDR_GOAL_POSITION, motor_outputs[i-1])
@@ -341,7 +393,7 @@ while 1:
     #target_direction = target_direction % 360
     #goal_index += 1
     #goal_index = goal_index % len(goal_orientations)
-    print(time.time() - a)
+    # print(time.time() - a)
     a = time.time()
 
 
