@@ -356,8 +356,20 @@ while 1:
         tc = 0
     tc += 1
     counter += 0.015
-    if PATH and time.time() - starttime < 15:
-        pid_x.setpoint = 120*math.sin(counter)
+    if PATH and time.time() - starttime < 10:
+        pid_x.setpoint = 100
+    elif PATH and time.time() - starttime < 12:
+        pid_x.setpoint = -100
+    elif PATH and time.time() - starttime < 14:
+        pid_x.setpoint = 100
+    elif PATH and time.time() - starttime < 16:
+        pid_x.setpoint = -100
+    elif PATH and time.time() - starttime < 18:
+        pid_x.setpoint = 100
+    elif PATH and time.time() - starttime < 20:
+        pid_x.setpoint = -100
+    elif PATH and time.time() - starttime < 22:
+        pid_x.setpoint = 100
     else:
         pid_x.setpoint = 0
         pid_y.setpoint = 0
