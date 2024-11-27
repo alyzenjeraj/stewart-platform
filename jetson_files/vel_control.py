@@ -1,36 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
-#*******************************************************************************
-# Copyright 2017 ROBOTIS CO., LTD.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-#*******************************************************************************
-
-
-#*******************************************************************************
-#***********************     Read and Write Example      ***********************
-#  Required Environment to run this example :
-#    - Protocol 2.0 supported DYNAMIXEL(X, P, PRO/PRO(A), MX 2.0 series)
-#    - DYNAMIXEL Starter Set (U2D2, U2D2 PHB, 12V SMPS)
-#  How to use the example :
-#    - Select the DYNAMIXEL in use at the MY_DXL in the example code. 
-#    - Build and Run from proper architecture subdirectory.
-#    - For ARM based SBCs such as Raspberry Pi, use linux_sbc subdirectory to build and run.
-#    - https://emanual.robotis.com/docs/en/software/dynamixel/dynamixel_sdk/overview/
-#  Author: Ryu Woon Jung (Leon)
-#  Maintainer : Zerom, Will Son
-# *******************************************************************************
 
 import os
 import inverse_kinematics
@@ -113,16 +80,7 @@ DXL_MOVING_STATUS_THRESHOLD = 20    # Dynamixel moving status threshold
 
 index = 0
 dxl_goal_position = [DXL_MINIMUM_POSITION_VALUE, DXL_MAXIMUM_POSITION_VALUE]         # Goal position
-
-
-# Initialize PortHandler instance
-# Set the port path
-# Get methods and members of PortHandlerLinux or PortHandlerWindows
 portHandler = PortHandler(DEVICENAME)
-
-# Initialize PacketHandler instance
-# Set the protocol version
-# Get methods and members of Protocol1PacketHandler or Protocol2PacketHandler
 packetHandler = PacketHandler(PROTOCOL_VERSION)
 
 # Open port
@@ -159,10 +117,6 @@ for i in range(3):
     print(current_pos)
     motor_offsets[i] = current_pos + int(inverse_kinematics.MotorOutputs.STEPS_PER_DEGREE*resting_angle)
 
-#inverse_kinematics.MotorOutputs.update_offsets(*motor_offsets)
-#print(motor_offsets)
-#exit()
-# Enable Dynamixel Torque
 for i in range(1, 4):
     dxl_comm_result, dxl_error = packetHandler.write1ByteTxRx(portHandler, i, ADDR_TORQUE_ENABLE, TORQUE_ENABLE)
     if dxl_comm_result != COMM_SUCCESS:
@@ -188,25 +142,6 @@ import pid
 x = 0
 y = 0
 h = 25
-
-# def update_gamepad():
-#     global x
-#     global y
-#     global h
-#     while(1):
-#         events = get_gamepad()
-#         for event in events:
-#             if(event.ev_type == "Absolute"):
-#                 if(event.code == "ABS_X"):
-#                     x = (int(event.state) - 128) / 10
-#                 if(event.code == "ABS_Y"):
-#                     y = (int(event.state) - 128) / -10
-#                 if(event.code == "ABS_GAS"):
-#                     h = int(event.state) / 10
-
-# t1 = threading.Thread(target=update_gamepad)
-
-# t1.start()
 
 
 starting_height = -45.5
@@ -271,26 +206,12 @@ def on_trackbar(val):
 cv.namedWindow("TrackedBars")
 cv.resizeWindow("TrackedBars", 640, 240)
 
-
-PATH = False
-BOUNCE = False
-BOUNCE2 = False
-BEARING = False
-
-if BEARING:
-    cv.createTrackbar("Hue Min", "TrackedBars", 93, 179, on_trackbar)
-    cv.createTrackbar("Hue Max", "TrackedBars", 128, 179, on_trackbar)
-    cv.createTrackbar("Sat Min", "TrackedBars", 73, 255, on_trackbar)
-    cv.createTrackbar("Sat Max", "TrackedBars", 255, 255, on_trackbar)
-    cv.createTrackbar("Val Min", "TrackedBars", 38, 255, on_trackbar)
-    cv.createTrackbar("Val Max", "TrackedBars", 104, 255, on_trackbar)
-else:
-    cv.createTrackbar("Hue Min", "TrackedBars", 0, 179, on_trackbar)
-    cv.createTrackbar("Hue Max", "TrackedBars", 20, 179, on_trackbar)
-    cv.createTrackbar("Sat Min", "TrackedBars", 144, 255, on_trackbar)
-    cv.createTrackbar("Sat Max", "TrackedBars", 255, 255, on_trackbar)
-    cv.createTrackbar("Val Min", "TrackedBars", 71, 255, on_trackbar)
-    cv.createTrackbar("Val Max", "TrackedBars", 145, 255, on_trackbar)
+cv.createTrackbar("Hue Min", "TrackedBars", 0, 179, on_trackbar)
+cv.createTrackbar("Hue Max", "TrackedBars", 20, 179, on_trackbar)
+cv.createTrackbar("Sat Min", "TrackedBars", 144, 255, on_trackbar)
+cv.createTrackbar("Sat Max", "TrackedBars", 255, 255, on_trackbar)
+cv.createTrackbar("Val Min", "TrackedBars", 71, 255, on_trackbar)
+cv.createTrackbar("Val Max", "TrackedBars", 145, 255, on_trackbar)
 
 # Start capturing video from the webcam. If multiple webcams connected, you may use 1,2, etc.
 picam2 = Picamera2()
@@ -303,176 +224,58 @@ picam2.start()
 # *1 CAP_PROP_FPS sets the frame rate of the webcam to 30 fps here
 map1, map2 = cv.fisheye.initUndistortRectifyMap(K, D, np.eye(3), K, DIM, cv.CV_16SC2)
 
-#pid_x = pid.PID(kp=0.015, ki=0.0015, kd=0.005, setpoint=0, output_limits=(-25,25))
-#pid_y = pid.PID(kp=0.015, ki=0.0015, kd=0.005, setpoint=50, output_limits=(-25,25))
-
-# semi good pd
-#pid_x = pid.PID(kp=0.022, ki=0.000000015, kd=0.01, setpoint=0, output_limits=(-25,25))
-#pid_y = pid.PID(kp=0.022, ki=0.000000015, kd=0.01, setpoint=50, output_limits=(-25,25))
-
-#pid_x = pid.PID(kp=0.022, ki=0.01, kd=0.012, setpoint=0, output_limits=(-25,25))
-#pid_y = pid.PID(kp=0.022, ki=0.01, kd=0.012, setpoint=0, output_limits=(-25,25))
-
-
-if BOUNCE:
-    pid_x = pid.PID(kp=0.07, ki=0.01, kd=0.05, setpoint=0, output_limits=(-20,20))
-    pid_y = pid.PID(kp=0.07, ki=0.01, kd=0.05, setpoint=0, output_limits=(-20,20))
-    counter = 0
-    t = time.time()
-    tc = 0
-    prev_x = 0
-    prev_y = 0
-    weight = 0.4
-
-    prev_x_output = 0
-    prev_y_output = 0
-    output_weight = .55
-
-    vel_weight = 0.2
-    smooth_vel = [0,0]
-    extrap_coef = 6
-else:
-    pid_x = pid.PID(kp=0.04, ki=0.015, kd=0.018, setpoint=0, output_limits=(-20,20))
-    pid_y = pid.PID(kp=0.04, ki=0.015, kd=0.018, setpoint=0, output_limits=(-20,20))
-    counter = 0
-    t = time.time()
-    tc = 0
-    prev_x = 0
-    prev_y = 0
-    weight = 0.4
-
-    prev_x_output = 0
-    prev_y_output = 0
-    output_weight = .3
-
-    vel_weight = 0.5
-    smooth_vel = [0,0]
-    extrap_coef = 3.5
 starttime = time.time()
+t = 0
+tc = 0
+
+# 42.61
+
+platform_center = (width//2 + 27, height//2 - 20)
 while 1:
     if (time.time() - t > 1):
         print(f"{tc} fps")
         t = time.time()
         tc = 0
     tc += 1
-    counter += 0.015
-    if PATH:
-        pid_x.setpoint = 100*math.sin(counter)
-        pid_y.setpoint = 100*math.cos(counter)
+
     # Read a frame from the webcam
     frame = picam2.capture_array()
     frame = cv.copyMakeBorder(frame, PADDING, PADDING, PADDING, PADDING, cv.BORDER_CONSTANT, None)
     frame = cv.remap(frame, map1, map2, interpolation=cv.INTER_LINEAR, borderMode=cv.BORDER_CONSTANT)
 
     frame = cv.resize(frame, (640, 480))
-    # *2 Set the image resolution to 480x480. Note increasing resolution increases processing power used, and may slow down video feed.
-    #frame = cv.resize(frame, (frame_width, frame_height))
-    #frame = cv.cvtColor(frame, cv.COLOR_RGB2BGR)
-    # Convert the frame from BGR to HSV color space to easily identify a colour
+    frame = cv.GaussianBlur(frame, (3, 3), 0)
     hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV) 
-
-    # *3 Define the range of yellow color in HSV [Hue, Saturation, Value]
-    # SET THESE VALUES VIA THE METHOD EXPLAINED IN THE TUTORIAL
     ball_color_lower = np.array([20, 100, 100]) # [lower Hue, lower Saturation, lower Value]
     ball_color_upper = np.array([30, 255, 255]) # [upper Hue, upper Saturation, upper Value]
-
-    # Threshold the HSV image to get the colors defined above
-    # Pixels in the range are set to white (255) and those that aren't are set to black (0), creating a binary mask 
-    #mask = cv.inRange(hsv, ball_color_lower, ball_color_upper)
-    
     mask = cv.inRange(hsv, lower, upper)
-    # cv.imshow("mask", mask)
-    # Find contours in the mask
-    # RETR_TREE retrieves all hierarchical contours and organizes them
-    # CHAIN_APPROX_SIMPLE compresses horizontal, vertical, and diagonal segments, leaving only their end points
+    cv.imshow("mask", mask)
     contours, _ = cv.findContours(mask, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-
-    # Find the index of the largest contour
     if contours:
-        # Determines the larget contour size using the cv.contour Area function
         largest_contour = max(contours, key=cv.contourArea)
-        # Computes the minimum enclosing circle aroudn the largest contour
         ((x, y), radius) = cv.minEnclosingCircle(largest_contour)
-        # * 4 Only consider large enough objects. If it only detects a small portion of your ball, you can test higher radius values to capture more of the ball
         if radius > 3:
-            # Draw a yellow circle around the ball
-            #cv.circle(frame, (int(x), int(y)), int(radius), (0, 255, 255), 2)
-            # Draw a red dot in the center of the ball
-              # (image to draw dot on, x,y pixel coordinates, radius in pixels, RGB values in this case red, -1 indicates to fill the circle)
-            # Display the position of the ball
 
             x_coord = (int(x) - frame_width//2)
             y_coord = -(frame_height//2 - int(y))
 
-            x_coord = (1-weight)*prev_x + weight*x_coord
-            y_coord = (1-weight)*prev_y + weight*y_coord
-
-            smooth_vel[0] = (1-vel_weight)*smooth_vel[0] + vel_weight*(x_coord-prev_x)
-            smooth_vel[1] = (1-vel_weight)*smooth_vel[1] + vel_weight*(y_coord-prev_y)
-
-            prev_x = x_coord
-            prev_y = y_coord
-
-            x_coord += smooth_vel[0] * extrap_coef
-            y_coord += smooth_vel[1] * extrap_coef
-
             cv.circle(frame, (int(x_coord + frame_width//2), int(y_coord + frame_height//2)), 2, (0, 0, 255), -1)
 
-            # print(f"Yellow ball detected at position: ({int(x)}, {int(y)})")
+    x_output = 0
+    y_output = 0
 
-            
-        
-            # print(x_coord, y_coord)
+    goal_orientation = [h,x_output, y_output]
 
-    # Display the resulting frame
-    cv.circle(frame, (int(pid_x.setpoint + frame_width//2), int(pid_y.setpoint + frame_height//2)), 10, (255, 255, 255), 2)
-    cv.imshow('frame', frame)
-    cv.pollKey()
-
-    # Break the loop when 'q' is pressed
-    # if cv.waitKey(1) & 0xFF == ord('q'):
-    #     break
-            
-    #print("Press any key to continue! (or press ESC to quit!)")
-    #if getch() == chr(0x1b):
-    #    break
-
-
-    x_error = pid_x.compute(x_coord)
-    y_error = pid_y.compute(y_coord)
-
-    # print(f'X_ERROR: {x_error}, Y_ERROR: {y_error}')
-    x_error = (1-output_weight)*prev_x_output + output_weight*x_error
-    y_error = (1-output_weight)*prev_y_output + output_weight*y_error
-
-    prev_x_output = x_error
-    prev_y_output = y_error
-    #if BOUNCE2 and time.time() - starttime < 10:
-    if BOUNCE2 and int(time.time()*8) % 2 and time.time() - starttime < 0.7:
-        goal_orientation = [-20, x_error, y_error]
-        print("here")
-    else:
-        goal_orientation = [h,x_error,y_error]
-
-    target_angle = 15
-    # print(goal_orientation)
-    #goal_orientation = goal_orientations[goal_index]
     arm_angles = ik.compute(*goal_orientation)
     motor_outputs = inverse_kinematics.MotorOutputs.compute_motor_outputs(*arm_angles)
-    # print(motor_outputs)
 
     for i in range(1, 4):
         packetHandler.write4ByteTxOnly(portHandler, i, ADDR_GOAL_POSITION, motor_outputs[i-1])
-    #    if dxl_comm_result != COMM_SUCCESS:
-    #        print("%s" % packetHandler.getTxRxResult(dxl_comm_result))
-    #    elif dxl_error != 0:
-    #        print("%s" % packetHandler.getRxPacketError(dxl_error))
-    #time.sleep(0.001)
-    #target_direction += 3
-    #target_direction = target_direction % 360
-    #goal_index += 1
-    #goal_index = goal_index % len(goal_orientations)
-    # print(time.time() - a)
+
+    cv.circle(frame, platform_center, 2, (0, 0, 255), -1)
+    cv.circle(frame, (platform_center[0], height-20), 2, (0, 0, 255), -1)
+    cv.imshow('frame', frame)
+    cv.pollKey()
     a = time.time()
 
 
