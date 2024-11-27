@@ -136,12 +136,12 @@ import cv2 as cv
 import numpy as np
 from time import sleep
 from threading import Thread, Lock
+import pid2
 import pid
-
 
 x = 0
 y = 0
-h = 25
+h = 0
 
 
 starting_height = -45.5
@@ -207,11 +207,11 @@ cv.namedWindow("TrackedBars")
 cv.resizeWindow("TrackedBars", 640, 240)
 
 cv.createTrackbar("Hue Min", "TrackedBars", 0, 179, on_trackbar)
-cv.createTrackbar("Hue Max", "TrackedBars", 20, 179, on_trackbar)
-cv.createTrackbar("Sat Min", "TrackedBars", 144, 255, on_trackbar)
+cv.createTrackbar("Hue Max", "TrackedBars", 179, 179, on_trackbar)
+cv.createTrackbar("Sat Min", "TrackedBars", 189, 255, on_trackbar)
 cv.createTrackbar("Sat Max", "TrackedBars", 255, 255, on_trackbar)
-cv.createTrackbar("Val Min", "TrackedBars", 71, 255, on_trackbar)
-cv.createTrackbar("Val Max", "TrackedBars", 145, 255, on_trackbar)
+cv.createTrackbar("Val Min", "TrackedBars", 138, 255, on_trackbar)
+cv.createTrackbar("Val Max", "TrackedBars", 192, 255, on_trackbar)
 
 # Start capturing video from the webcam. If multiple webcams connected, you may use 1,2, etc.
 picam2 = Picamera2()
@@ -228,9 +228,44 @@ starttime = time.time()
 t = 0
 tc = 0
 
-# 42.61
+ANGLE_PER_PIXEL = (49/(height/2-40))*2
 
-platform_center = (width//2 + 27, height//2 - 20)
+platform_center = ((width//2 + 27)//2, (height//2 - 20)//2)
+
+x_angle = 0
+y_angle = 0
+
+def get_ball_position(ball_angle, platform_angle = 0):
+    ball_angle = ball_angle/180*math.pi
+    platform_angle = (90-platform_angle)/180*math.pi
+
+    third_angle = math.pi - ball_angle - platform_angle
+    ball_pos = (85+h)/math.sin(third_angle)*math.sin(ball_angle)
+    return ball_pos*1.2
+
+
+pid_x = pid.PID(kp=0.03, ki=0.0000004, kd=0.001, setpoint=0, output_limits=(-20,20))
+pid_y = pid.PID(kp=0.03, ki=0.0000004, kd=0.001, setpoint=0, output_limits=(-20,20))
+
+pid_pos_x = pid.PID(kp=3, ki=0.00000000004, kd=0.1, setpoint=0, output_limits=(-500,500))
+pid_pos_y = pid.PID(kp=3, ki=0.00000000004, kd=0.1, setpoint=0, output_limits=(-500,500))
+
+x_calibrated = 0
+y_calibrated = 0
+
+pos_smooth = [0,0]
+vel_smooth = [0,0]
+pos_weight = 0.6
+vel_weight = 0.6
+
+PATH = True
+
+counter = 0
+ball_height = 0
+
+prev_output = [0,0]
+
+output_slew_rate = 7500 # degrees per second
 while 1:
     if (time.time() - t > 1):
         print(f"{tc} fps")
@@ -238,12 +273,18 @@ while 1:
         tc = 0
     tc += 1
 
+    counter += 0.02
+    if PATH:
+        pid_pos_x.setpoint = 45*math.sin(counter)
+        pid_pos_x.setpoint = 45*math.cos(counter)
+
+
     # Read a frame from the webcam
     frame = picam2.capture_array()
     frame = cv.copyMakeBorder(frame, PADDING, PADDING, PADDING, PADDING, cv.BORDER_CONSTANT, None)
     frame = cv.remap(frame, map1, map2, interpolation=cv.INTER_LINEAR, borderMode=cv.BORDER_CONSTANT)
 
-    frame = cv.resize(frame, (640, 480))
+    frame = cv.resize(frame, (320, 240))
     frame = cv.GaussianBlur(frame, (3, 3), 0)
     hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV) 
     ball_color_lower = np.array([20, 100, 100]) # [lower Hue, lower Saturation, lower Value]
@@ -256,15 +297,52 @@ while 1:
         ((x, y), radius) = cv.minEnclosingCircle(largest_contour)
         if radius > 3:
 
-            x_coord = (int(x) - frame_width//2)
-            y_coord = -(frame_height//2 - int(y))
+            x_coord = (int(x) - platform_center[0])
+            y_coord = -(platform_center[1] - int(y))
 
-            cv.circle(frame, (int(x_coord + frame_width//2), int(y_coord + frame_height//2)), 2, (0, 0, 255), -1)
+            x_angle = x_coord * ANGLE_PER_PIXEL
+            y_angle = y_coord * ANGLE_PER_PIXEL
 
-    x_output = 0
-    y_output = 0
+            cv.circle(frame, (int(x_coord + platform_center[0]), int(y_coord + platform_center[1])), 2, (0, 0, 255), -1)
 
-    goal_orientation = [h,x_output, y_output]
+            x_calibrated = get_ball_position(x_angle, goal_orientation[1])
+            y_calibrated = get_ball_position(y_angle, goal_orientation[2])
+
+            ball_height = -math.sin(goal_orientation[1]/180*math.pi)*x_calibrated - math.sin(goal_orientation[2]/180*math.pi)*y_calibrated
+            prev_pos = [pos_smooth[0], pos_smooth[1]]
+
+            pos_smooth[0] = (1-pos_weight)*pos_smooth[0] + pos_weight*(x_calibrated)
+            pos_smooth[1] = (1-pos_weight)*pos_smooth[1] + pos_weight*(y_calibrated)
+
+            vel_smooth[0] = (1-vel_weight)*vel_smooth[0] + vel_weight*(pos_smooth[0]-prev_pos[0])/0.033
+            vel_smooth[1] = (1-vel_weight)*vel_smooth[1] + vel_weight*(pos_smooth[1]-prev_pos[1])/0.033
+
+    x_speed_command = pid_pos_x.compute(pos_smooth[0])
+    y_speed_command = pid_pos_y.compute(pos_smooth[1])
+
+    print(x_speed_command, y_speed_command)
+
+    pid_x.setpoint = x_speed_command
+    pid_y.setpoint = y_speed_command
+
+    x_output = pid_x.compute(vel_smooth[0])
+    y_output = pid_y.compute(vel_smooth[1])
+
+    x_output = max(prev_output[0] - output_slew_rate*0.033, x_output)
+    x_output = min(prev_output[0] + output_slew_rate*0.033, x_output)
+
+    y_output = max(prev_output[1] - output_slew_rate*0.033, y_output)
+    y_output = min(prev_output[1] + output_slew_rate*0.033, y_output)
+
+    prev_output = [x_output, y_output]
+
+    #x_output = 15
+    #y_output = 15
+
+    h_compensated = h - ball_height
+    h_compensated = max(-25, h_compensated)
+    h_compensated = min(25, h_compensated)
+    goal_orientation = [h_compensated,x_output, y_output]
 
     arm_angles = ik.compute(*goal_orientation)
     motor_outputs = inverse_kinematics.MotorOutputs.compute_motor_outputs(*arm_angles)
@@ -273,7 +351,8 @@ while 1:
         packetHandler.write4ByteTxOnly(portHandler, i, ADDR_GOAL_POSITION, motor_outputs[i-1])
 
     cv.circle(frame, platform_center, 2, (0, 0, 255), -1)
-    cv.circle(frame, (platform_center[0], height-20), 2, (0, 0, 255), -1)
+    cv.circle(frame, (platform_center[0], height-60), 2, (0, 0, 255), -1)
+    cv.circle(frame, (int(pid_x.setpoint + platform_center[0]), int(pid_y.setpoint + platform_center[1])), 10, (255, 255, 255), 2)
     cv.imshow('frame', frame)
     cv.pollKey()
     a = time.time()

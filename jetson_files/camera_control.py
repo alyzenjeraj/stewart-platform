@@ -272,9 +272,9 @@ cv.namedWindow("TrackedBars")
 cv.resizeWindow("TrackedBars", 640, 240)
 
 
-PATH = False
+PATH = True
 BOUNCE = False
-BOUNCE2 = False
+BOUNCE2 = True
 BEARING = False
 
 if BEARING:
@@ -286,11 +286,11 @@ if BEARING:
     cv.createTrackbar("Val Max", "TrackedBars", 104, 255, on_trackbar)
 else:
     cv.createTrackbar("Hue Min", "TrackedBars", 0, 179, on_trackbar)
-    cv.createTrackbar("Hue Max", "TrackedBars", 20, 179, on_trackbar)
-    cv.createTrackbar("Sat Min", "TrackedBars", 144, 255, on_trackbar)
+    cv.createTrackbar("Hue Max", "TrackedBars", 179, 179, on_trackbar)
+    cv.createTrackbar("Sat Min", "TrackedBars", 189, 255, on_trackbar)
     cv.createTrackbar("Sat Max", "TrackedBars", 255, 255, on_trackbar)
-    cv.createTrackbar("Val Min", "TrackedBars", 71, 255, on_trackbar)
-    cv.createTrackbar("Val Max", "TrackedBars", 145, 255, on_trackbar)
+    cv.createTrackbar("Val Min", "TrackedBars", 138, 255, on_trackbar)
+    cv.createTrackbar("Val Max", "TrackedBars", 192, 255, on_trackbar)
 
 # Start capturing video from the webcam. If multiple webcams connected, you may use 1,2, etc.
 picam2 = Picamera2()
@@ -332,8 +332,8 @@ if BOUNCE:
     smooth_vel = [0,0]
     extrap_coef = 6
 else:
-    pid_x = pid.PID(kp=0.04, ki=0.015, kd=0.018, setpoint=0, output_limits=(-20,20))
-    pid_y = pid.PID(kp=0.04, ki=0.015, kd=0.018, setpoint=0, output_limits=(-20,20))
+    pid_x = pid.PID(kp=0.04, ki=0.01, kd=0.0195, setpoint=0, output_limits=(-20,20))
+    pid_y = pid.PID(kp=0.04, ki=0.01, kd=0.0195, setpoint=0, output_limits=(-20,20))
     counter = 0
     t = time.time()
     tc = 0
@@ -356,9 +356,11 @@ while 1:
         tc = 0
     tc += 1
     counter += 0.015
-    if PATH:
-        pid_x.setpoint = 100*math.sin(counter)
-        pid_y.setpoint = 100*math.cos(counter)
+    if PATH and time.time() - starttime < 15:
+        pid_x.setpoint = 120*math.sin(counter)
+    else:
+        pid_x.setpoint = 0
+        pid_y.setpoint = 0
     # Read a frame from the webcam
     frame = picam2.capture_array()
     frame = cv.copyMakeBorder(frame, PADDING, PADDING, PADDING, PADDING, cv.BORDER_CONSTANT, None)
@@ -448,8 +450,8 @@ while 1:
     prev_x_output = x_error
     prev_y_output = y_error
     #if BOUNCE2 and time.time() - starttime < 10:
-    if BOUNCE2 and int(time.time()*8) % 2 and time.time() - starttime < 0.7:
-        goal_orientation = [-20, x_error, y_error]
+    if BOUNCE2 and int(time.time()*8) % 2 and time.time() - starttime < 0.5:
+        goal_orientation = [-0, x_error, y_error]
         print("here")
     else:
         goal_orientation = [h,x_error,y_error]
